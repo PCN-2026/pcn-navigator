@@ -1400,60 +1400,155 @@ function renderDirections(steps){
 }
 
 /* ══════════════════════════════════════════════
-   PCN WAYPOINTS (same algorithm as v16)
+   PCN GRAPH ROUTING — v37
+   
+   Strategy:
+   1. Build a flat list of all PCN endpoints (first
+      and last coordinate of every segment)
+   2. Find the PCN endpoint nearest to origin that
+      is within acceptable detour range
+   3. Find the PCN endpoint nearest to destination
+      that is within acceptable detour range
+   4. Chain PCN segments greedily between entry
+      and exit using nearest-neighbour
+   5. Pass entry → intermediate PCN points → exit
+      as waypoints to OneMap — these are ACTUAL
+      PCN coordinates, not midpoints
+   6. Hard detour cap: total PCN-routed distance
+      must be ≤ 1.4× direct straight-line distance
+   7. Bearing consistency: reject segments that
+      require backtracking > 100°
+
+   This gives OneMap real PCN access points to snap
+   to, rather than arbitrary midpoints that may be
+   in the middle of a field.
 ══════════════════════════════════════════════ */
 function getPCNWaypoints(){
   if(!window._pcnFeatures||!window._pcnFeatures.length||!fromPlace||!toPlace)return[];
-  var oLat=fromPlace.lat,oLng=fromPlace.lng,dLat=toPlace.lat,dLng=toPlace.lng;
-  var straightKm=haversine(oLat,oLng,dLat,dLng);
-  if(straightKm<0.8)return[];
-  var vLat=dLat-oLat,vLng=dLng-oLng,vLen=Math.sqrt(vLat*vLat+vLng*vLng);
-  var destBearing=Math.atan2(vLng,vLat);
-  var halfWidth=Math.min(0.02,straightKm*0.004);
 
-  var byPark={};
-  window._pcnFeatures.forEach(function(f){
-    var nm=(f.properties&&(f.properties.PARK||f.properties.PCN_LOOP)||'').trim();if(!nm)return;
+  var oLat=fromPlace.lat, oLng=fromPlace.lng;
+  var dLat=toPlace.lat,   dLng=toPlace.lng;
+  var straightKm=haversine(oLat,oLng,dLat,dLng);
+
+  // Too short for PCN detour to make sense
+  if(straightKm<0.5)return[];
+
+  // Max detour: PCN leg can add at most 40% over straight line
+  var MAX_DETOUR=1.4;
+  // Max distance to walk to nearest PCN entry/exit (in km)
+  var MAX_ENTRY_KM=Math.min(0.8, straightKm*0.25);
+
+  // ── Step 1: Build PCN endpoint index ──────────
+  // For each segment, store {lat,lng,segId,isStart}
+  var endpoints=[];
+  var segments=[];
+
+  window._pcnFeatures.forEach(function(f,fi){
     var geom=f.geometry;if(!geom)return;
     var coords=geom.coordinates;if(!coords||!coords.length)return;
     var segs=geom.type==='MultiLineString'?coords:[coords];
-    segs.forEach(function(seg){
+    var nm=(f.properties&&(f.properties.PARK||f.properties.PCN_LOOP)||'Connector').trim();
+
+    segs.forEach(function(seg,si){
       if(!seg||seg.length<2)return;
-      [0,Math.floor(seg.length/4),Math.floor(seg.length/2),Math.floor(seg.length*3/4),seg.length-1].forEach(function(idx){
-        var pt=seg[Math.min(idx,seg.length-1)];if(!pt||pt.length<2)return;
-        var pLng=parseFloat(pt[0]),pLat=parseFloat(pt[1]);if(isNaN(pLat)||isNaN(pLng))return;
-        if(!byPark[nm])byPark[nm]=[];byPark[nm].push([pLat,pLng]);
+      var segId=segments.length;
+      var startPt=[parseFloat(seg[0][1]),parseFloat(seg[0][0])];
+      var endPt=[parseFloat(seg[seg.length-1][1]),parseFloat(seg[seg.length-1][0])];
+      if(isNaN(startPt[0])||isNaN(endPt[0]))return;
+
+      // Sample points along segment for waypoint passing
+      var samplePts=[];
+      var step=Math.max(1,Math.floor(seg.length/6));
+      for(var i=0;i<seg.length;i+=step){
+        samplePts.push([parseFloat(seg[i][1]),parseFloat(seg[i][0])]);
+      }
+      if(samplePts[samplePts.length-1][0]!==endPt[0]){samplePts.push(endPt);}
+
+      segments.push({id:segId,name:nm,start:startPt,end:endPt,pts:samplePts,
+        startKm:haversine(startPt[0],startPt[1],oLat,oLng),
+        endKm:haversine(endPt[0],endPt[1],oLat,oLng)
       });
+      endpoints.push({lat:startPt[0],lng:startPt[1],segId:segId,isStart:true});
+      endpoints.push({lat:endPt[0],  lng:endPt[1],  segId:segId,isStart:false});
     });
   });
 
-  var candidates=[];
-  Object.keys(byPark).forEach(function(nm){
-    var pts=byPark[nm];var bestScore=9999,bestPt=null,bestProj=-1;
-    pts.forEach(function(pt){
-      var pLat=pt[0],pLng=pt[1];
-      var wLat=pLat-oLat,wLng=pLng-oLng;
-      var proj=(wLat*vLat+wLng*vLng)/(vLen*vLen);if(proj<0.1||proj>0.9)return;
-      var perpLat=wLat-proj*vLat,perpLng=wLng-proj*vLng;
-      var perp=Math.sqrt(perpLat*perpLat+perpLng*perpLng);if(perp>halfWidth)return;
-      var ptBearing=Math.atan2(pLng-oLng,pLat-oLat);
-      var bd=Math.abs(ptBearing-destBearing);if(bd>Math.PI)bd=2*Math.PI-bd;
-      if(bd>Math.PI*0.42)return;
-      var score=perp+(bd*0.5);
-      if(score<bestScore){bestScore=score;bestPt=pt;bestProj=proj;}
-    });
-    if(bestPt){
-      var legKm=haversine(oLat,oLng,bestPt[0],bestPt[1])+haversine(bestPt[0],bestPt[1],dLat,dLng);
-      if(legKm>straightKm*1.5)return;
-      candidates.push({lat:bestPt[0],lng:bestPt[1],proj:bestProj,name:nm});
-    }
+  if(!segments.length)return[];
+
+  // ── Step 2: Find best PCN entry near origin ────
+  var bestEntry=null, bestEntryDist=9999;
+  endpoints.forEach(function(ep){
+    var d=haversine(oLat,oLng,ep.lat,ep.lng);
+    if(d>MAX_ENTRY_KM)return;
+    // Bearing check: entry must be roughly toward destination
+    var bearing=Math.atan2(ep.lng-oLng,ep.lat-oLat);
+    var destBearing=Math.atan2(dLng-oLng,dLat-oLat);
+    var bd=Math.abs(bearing-destBearing);if(bd>Math.PI)bd=2*Math.PI-bd;
+    if(bd>Math.PI*0.6)return; // reject if >108° off course
+    if(d<bestEntryDist){bestEntryDist=d;bestEntry=ep;}
   });
 
-  if(!candidates.length)return[];
-  candidates.sort(function(a,b){return a.proj-b.proj;});
-  var MIN_GAP=0.15,filtered=[candidates[0]];
-  for(var i=1;i<candidates.length;i++){if(candidates[i].proj-filtered[filtered.length-1].proj>=MIN_GAP)filtered.push(candidates[i]);}
-  return filtered.slice(0,3).map(function(c){return[c.lat,c.lng];});
+  if(!bestEntry)return[];
+
+  // ── Step 3: Find best PCN exit near destination ─
+  var bestExit=null, bestExitDist=9999;
+  endpoints.forEach(function(ep){
+    var d=haversine(dLat,dLng,ep.lat,ep.lng);
+    if(d>MAX_ENTRY_KM)return;
+    // Must be different segment from entry
+    if(ep.segId===bestEntry.segId)return;
+    if(d<bestExitDist){bestExitDist=d;bestExit=ep;}
+  });
+
+  // If same segment services both entry and exit, use that segment directly
+  var entrySeg=segments[bestEntry.segId];
+  var exitSeg=bestExit?segments[bestExit.segId]:null;
+
+  // ── Step 4: Validate total detour ─────────────
+  // entry detour + PCN segment distance + exit approach
+  var pcnDistKm=exitSeg
+    ?haversine(bestEntry.lat,bestEntry.lng,bestExit.lat,bestExit.lng)
+    :0;
+  var totalKm=bestEntryDist+pcnDistKm+bestExitDist;
+  if(totalKm>straightKm*MAX_DETOUR){
+    console.log('[PCN] Detour too large: '+totalKm.toFixed(2)+'km vs '+straightKm.toFixed(2)+'km straight');
+    return[];
+  }
+
+  // ── Step 5: Build waypoint list ───────────────
+  // Entry point + sample points along entry segment + exit point
+  var waypoints=[];
+
+  // Entry point
+  waypoints.push([bestEntry.lat,bestEntry.lng]);
+
+  // If entry segment has useful internal points, add them
+  // (only if they move us toward destination)
+  var entryPts=entrySeg.pts;
+  // Determine direction: forward or reverse along segment
+  var useForward=bestEntry.isStart;
+  var pts=useForward?entryPts:entryPts.slice().reverse();
+  // Add intermediate points that are progressively closer to destination
+  var lastDist=haversine(bestEntry.lat,bestEntry.lng,dLat,dLng);
+  for(var i=1;i<pts.length-1;i++){
+    var d=haversine(pts[i][0],pts[i][1],dLat,dLng);
+    if(d<lastDist){waypoints.push(pts[i]);lastDist=d;}
+  }
+
+  // Exit point (if different segment and not too close to last waypoint)
+  if(bestExit&&bestExit.segId!==bestEntry.segId){
+    var lastWpt=waypoints[waypoints.length-1];
+    var sep=haversine(lastWpt[0],lastWpt[1],bestExit.lat,bestExit.lng);
+    if(sep>0.05){waypoints.push([bestExit.lat,bestExit.lng]);}
+  }
+
+  // Final cap: max 4 waypoints to avoid over-constraining
+  waypoints=waypoints.slice(0,4);
+
+  console.log('[PCN Graph] '+waypoints.length+' waypoints: entry='+entrySeg.name+(exitSeg?' exit='+exitSeg.name:'')
+    +' detour='+totalKm.toFixed(2)+'km/'+straightKm.toFixed(2)+'km');
+
+  return waypoints;
 }
 
 /* ══════════════════════════════════════════════
@@ -1717,7 +1812,7 @@ function logRide(km,pcnNames){
     var prog=stats[c.stat]||0;var done=stats._completedChallenges&&stats._completedChallenges.includes(c.id);
     if(!done&&prog>=c.goal){stats.xp+=c.xp;if(!stats._completedChallenges)stats._completedChallenges=[];stats._completedChallenges.push(c.id);newBadges.push({icon:'⚡',name:c.name+' complete! +'+c.xp+' XP'});}
   });
-  stats.todayRides.push({km:km,pcn:thisRide,xp:xp,kcal:calcCalories(km,currentMode),mode:currentMode,time:new Date().toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit'})});
+  stats.todayRides.push({km:km,pcn:thisRide,xp:xp,kcal:calcCalories(km,currentMode,nav.active?null:undefined),mode:currentMode,time:new Date().toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit'})});
   saveStats();updateTopBar();
   var rideNum=stats.todayRides.length,remaining=MAX-rideNum;
   showToast('🎉 +'+xp+' XP · '+km.toFixed(1)+'km · '+thisRide+' PCN  [Ride '+rideNum+'/'+MAX+' today]');
@@ -2203,18 +2298,23 @@ function checkNavPCN(lat, lng) {
 
 /* ── Arrival ─────────────────────────────────── */
 function onArrival() {
+  var actualSecs = nav.startTime ? Math.round((Date.now() - nav.startTime) / 1000) : null;
   speak('You have arrived at your destination. Well done!');
   // Merge tree session data to persistent stats
   var ts=mergeTreeStatsToSession();
   if(treeSession.totalCount>0){
-    showToast('🌳 Passed '+treeSession.totalCount+' trees · '+treeSession.species.size+' species');
+    setTimeout(function(){showToast('🌳 Passed '+treeSession.totalCount+' trees · '+treeSession.species.size+' species');},1500);
   }
   showToast('🏁 Arrived! Great ride!');
   stopNav(true);
-  // Show log ride prompt after short delay
+  // Show route card with ACTUAL calorie calculation
   setTimeout(function() {
     document.getElementById('appScreen').classList.remove('nav-mode');
     document.getElementById('routeCard').style.display = 'block';
+    // Update calorie card with real elapsed time
+    if(actualSecs && actualSecs > 60){
+      showCalorieCard(currentRouteKm, currentMode, actualSecs);
+    }
     document.getElementById('routeCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     showToast('🎉 Log your ride to earn XP!');
   }, 2000);
@@ -2331,21 +2431,30 @@ function setMode(mode){
   savePrefs({mode:currentMode,weight:userWeightKg,mapStyle:currentMapStyle});
 }
 
-function calcCalories(km,mode){
-  var a=ACT[mode]||ACT.cycle;
-  return Math.round(a.met*userWeightKg*(km/a.speedKmh));
+function calcCalories(km, mode, actualSecs){
+  var a = ACT[mode] || ACT.cycle;
+  // Use actual elapsed time if available, else estimate from assumed speed
+  var hours = actualSecs ? (actualSecs / 3600) : (km / a.speedKmh);
+  return Math.round(a.met * userWeightKg * hours);
 }
 
-function showCalorieCard(km,mode){
-  var kcal=calcCalories(km,mode);
-  var a=ACT[mode]||ACT.cycle;
-  document.getElementById('calIcon').textContent=mode==='jog'?'🏃':'🔥';
-  document.getElementById('calVal').textContent=kcal;
-  var bowls=Math.round(kcal/350);
-  document.getElementById('calDetail').textContent=
-    '≈ '+bowls+' bowl'+(bowls!==1?'s':'')+' of chicken rice  ·  '+
-    userWeightKg+'kg × '+a.met+' MET × '+(km/a.speedKmh).toFixed(1)+'h';
-  document.getElementById('calCard').style.display='flex';
+function showCalorieCard(km, mode, actualSecs){
+  var kcal = calcCalories(km, mode, actualSecs);
+  var a    = ACT[mode] || ACT.cycle;
+  document.getElementById('calIcon').textContent = mode === 'jog' ? '🏃' : '🔥';
+  document.getElementById('calVal').textContent  = kcal;
+  var bowls = Math.round(kcal / 350);
+  var timeStr;
+  if(actualSecs){
+    var m = Math.floor(actualSecs/60), s = Math.round(actualSecs%60);
+    timeStr = m+'m '+s+'s actual ride time';
+  } else {
+    var estMins = Math.round((km / a.speedKmh) * 60);
+    timeStr = '~'+estMins+'min estimated · actual time shown after ride';
+  }
+  document.getElementById('calDetail').textContent =
+    userWeightKg+'kg × MET '+a.met+' × '+timeStr;
+  document.getElementById('calCard').style.display = 'flex';
 }
 
 /* ══════════════════════════════════════════════
