@@ -1,0 +1,2 @@
+/api/gettoken   /.netlify/functions/gettoken   200
+/api/gettrees   /.netlify/functions/gettrees   200
