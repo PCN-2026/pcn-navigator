@@ -443,7 +443,10 @@ html,body{height:100%;overflow:hidden;background:#071209;font-family:'Segoe UI',
   padding:10px 14px;text-align:center;font-size:13px;font-weight:700;
   color:#ffaaaa;pointer-events:auto;backdrop-filter:blur(4px);
 }
-#appScreen.nav-mode #offRouteWarn{display:block}
+/* When free tracking - panel hidden, map fills full screen */
+#appScreen.free-mode #panel{max-height:0;padding:0;overflow:hidden;border-top:none}
+#appScreen.free-mode #mapWrap{flex:1;min-height:0}
+#appScreen.free-mode #freeHud{display:block}
 #offRouteWarn.hidden{display:none!important}
 
 /* ══════════════════════════════════════════════
@@ -1300,7 +1303,7 @@ html,body{height:100%;overflow:hidden;background:#071209;font-family:'Segoe UI',
     <button id="activityBadge" title="Tap to switch activity mode">🚴 Cycling</button>
     <button class="tb-icon-btn" id="tbStats" title="Achievements">🏆</button>
     <button class="tb-icon-btn" id="tbRoutes" title="My saved routes">💾</button>
-    <button class="tb-icon-btn" id="tbSettings" title="Settings">⚙️</button>
+    <button class="tb-icon-btn" id="tbSettings" title="Home">🏠</button>
   </div>
 
   <div id="mapWrap">
@@ -2809,7 +2812,7 @@ var nav = {
   routePts:     [],         // decoded route [lat,lng] array
   steps:        [],         // instruction steps
   pcnHit:       new Set(),  // PCN connectors entered during nav
-  voiceOn:      true,       // voice navigation enabled
+  voiceOn:      false,      // voice navigation MUTED by default — user can enable
   offRoute:     false,      // currently off route
   offRouteCount:0,          // consecutive off-route GPS readings
   elapsedTimer: null,       // setInterval for elapsed clock
@@ -2853,7 +2856,7 @@ function startNav() {
   nav.offRouteCount= 0;
   nav.announcedSteps = new Set();
   nav.lastOnTrack  = 0;
-  nav.voiceOn      = true;
+  nav.voiceOn      = false;  // muted by default — user taps 🔇 to enable
   resetTreeSession();
   document.getElementById('navTreeCount').textContent='0';
 
@@ -2861,9 +2864,10 @@ function startNav() {
   document.getElementById('appScreen').classList.add('nav-mode');
   if (lmap) lmap.invalidateSize();
 
-  // Update voice button state
-  document.getElementById('voiceToggle').classList.add('voice-on');
-  document.getElementById('voiceToggle').textContent = '🔊';
+  // Voice toggle — start muted
+  document.getElementById('voiceToggle').classList.remove('voice-on');
+  document.getElementById('voiceToggle').textContent = '🔇';
+  document.getElementById('voiceToggle').title = 'Tap to enable voice';
 
   // Reset HUD displays
   setNavHUD(nav.steps[0], nav.totalDistM, 0);
@@ -2889,7 +2893,7 @@ function startNav() {
   );
 
   // Voice announcement
-  speak('Navigation started. Follow the green route.');
+  // No startup speech — voice is muted by default, user can enable via 🔇 button
   showToast('🚴 Navigation started — follow the green route!');
 
   // Update GO button
@@ -2935,9 +2939,41 @@ function onNavPosition(pos) {
   var hdg = pos.coords.heading;
   var ts  = pos.timestamp;
 
+  // Auto-pause: if stationary for 15s, pause elapsed timer
+  var isMoving = spd===null || spd >= 0.5;
+  if(!isMoving){
+    if(!nav.stoppedAt)nav.stoppedAt=Date.now();
+    if(!nav.autoPaused&&Date.now()-nav.stoppedAt>=15000){
+      nav.autoPaused=true;nav.pausedAt=Date.now();
+      if(nav.elapsedTimer){clearInterval(nav.elapsedTimer);nav.elapsedTimer=null;}
+      showToast('⏸ Navigation paused — move to resume');
+    }
+  }else{
+    if(nav.stoppedAt){
+      nav.stoppedAt=null;
+      if(nav.autoPaused){
+        nav.autoPaused=false;
+        nav.startTime+=Date.now()-nav.pausedAt;
+        nav.elapsedTimer=setInterval(updateElapsed,1000);
+        showToast('▶ Navigation resumed');
+      }
+    }
+  }
+
   // Update user marker on map
   placeUserDot(lat, lng);
-  lmap.panTo([lat, lng]);
+
+  // Auto-pan: offset the view so user dot is in lower-third, showing route ahead
+  // Calculate a point slightly ahead of the user based on heading
+  var panLat = lat, panLng = lng;
+  if (hdg !== null && hdg !== undefined && !isNaN(hdg)) {
+    // Offset centre ~150m ahead of user in direction of travel
+    var offsetDeg = 0.0014; // ~155m
+    var hdgRad = hdg * Math.PI / 180;
+    panLat = lat + offsetDeg * Math.cos(hdgRad);
+    panLng = lng + offsetDeg * Math.sin(hdgRad);
+  }
+  lmap.panTo([panLat, panLng], {animate:true, duration:0.5});
 
   // Compute speed if not provided by GPS
   if (spd === null && nav.lastPos) {
@@ -4303,9 +4339,9 @@ function startFreeTracking(){
   freeTrack.targetSecs = targetSecs;
   freeTrack._targetReached = false;
 
-  // Show app screen with clean map — hide panel completely
+  // Show app screen with clean full-screen map
   showScreen('appScreen');
-  document.getElementById('panel').style.display='none';
+  document.getElementById('appScreen').classList.add('free-mode');
 
   setTimeout(function(){
     lmap.invalidateSize();
@@ -4360,25 +4396,61 @@ function startFreeTracking(){
   },200);
 }
 
+var FREE_PAUSE_THRESHOLD_KMH=0.5; // below this speed = stationary
+var FREE_PAUSE_DELAY_MS=15000;    // 15 seconds before auto-pause
+
 function onFreePosition(pos){
   if(!freeTrack.active)return;
   var lat=pos.coords.latitude,lng=pos.coords.longitude;
-  var speed=pos.coords.speed; // m/s from GPS, may be null
+  var speed=pos.coords.speed; // m/s
+  var speedKmh=speed!==null?speed*3.6:null;
 
-  // Accumulate distance
-  if(freeTrack.lastLat!==null){
-    var d=haversine(freeTrack.lastLat,freeTrack.lastLng,lat,lng)*1000; // metres
-    if(d>2&&d<500){freeTrack.distM+=d;} // ignore tiny jitter and jumps
+  // Derive speed from position if GPS doesn't provide it
+  if(speedKmh===null&&freeTrack.lastLat!==null){
+    var dt=(pos.timestamp-(freeTrack.lastTs||pos.timestamp))/1000;
+    if(dt>0.5){
+      var dd=haversine(freeTrack.lastLat,freeTrack.lastLng,lat,lng)*1000;
+      speedKmh=(dd/dt)*3.6;
+    }
   }
+  freeTrack.lastTs=pos.timestamp;
+  var isMoving=speedKmh===null||speedKmh>=FREE_PAUSE_THRESHOLD_KMH;
+
+  if(isMoving){
+    if(freeTrack.stoppedAt){
+      freeTrack.stoppedAt=null;
+      if(freeTrack.autoPaused){
+        // Auto-resume: shift startTime forward by paused duration
+        freeTrack.autoPaused=false;
+        freeTrack.startTime+=Date.now()-freeTrack.pausedAt;
+        freeTrack.timer=setInterval(updateFreeHUD,1000);
+        showToast('▶ Auto-resumed');
+        document.getElementById('fhStopBtn').textContent='⏹ End Workout';
+      }
+    }
+    // Accumulate distance only when not paused
+    if(!freeTrack.autoPaused&&freeTrack.lastLat!==null){
+      var d=haversine(freeTrack.lastLat,freeTrack.lastLng,lat,lng)*1000;
+      if(d>2&&d<500)freeTrack.distM+=d;
+    }
+    if(speedKmh!==null){
+      freeTrack.speedSamples.push(speedKmh);
+      if(freeTrack.speedSamples.length>8)freeTrack.speedSamples.shift();
+    }
+  }else{
+    // Not moving
+    if(!freeTrack.stoppedAt)freeTrack.stoppedAt=Date.now();
+    if(!freeTrack.autoPaused&&Date.now()-freeTrack.stoppedAt>=FREE_PAUSE_DELAY_MS){
+      // 15 seconds stationary → auto-pause
+      freeTrack.autoPaused=true;
+      freeTrack.pausedAt=Date.now();
+      if(freeTrack.timer){clearInterval(freeTrack.timer);freeTrack.timer=null;}
+      showToast('⏸ Auto-paused — move to resume');
+      document.getElementById('fhStopBtn').textContent='⏹ End Workout (paused)';
+    }
+  }
+
   freeTrack.lastLat=lat;freeTrack.lastLng=lng;
-
-  // Speed from GPS if available, else rolling average from distance
-  if(speed!==null&&speed>=0){
-    freeTrack.speedSamples.push(speed*3.6); // m/s → km/h
-    if(freeTrack.speedSamples.length>8)freeTrack.speedSamples.shift();
-  }
-
-  // Move user dot
   placeUserDot(lat,lng);
   lmap.panTo([lat,lng],{animate:true,duration:.5});
 }
@@ -4423,7 +4495,7 @@ function stopFreeTracking(){
   if(freeTrack.watchId)navigator.geolocation.clearWatch(freeTrack.watchId);
   if(freeTrack.timer)clearInterval(freeTrack.timer);
   document.getElementById('freeHud').style.display='none';
-  document.getElementById('panel').style.display=''; // restore
+  document.getElementById('appScreen').classList.remove('free-mode'); // restore panel
 
   var elapsed=Math.round((Date.now()-freeTrack.startTime)/1000);
   var km=parseFloat((freeTrack.distM/1000).toFixed(2));
@@ -5173,12 +5245,17 @@ function setupButtons(){
     showToast((newMode==='jog'?'🏃 Jogging':'🚴 Cycling')+' mode — tap Route to recalculate');
   });
   document.getElementById('tbSettings').addEventListener('click',function(){
+    // Stop any active session first
+    if(nav&&nav.active)stopNav(true);
+    if(freeTrack&&freeTrack.active)stopFreeTracking();
     userWeightKg=parseInt(document.getElementById('weightInput').value)||70;
-    // Settings goes back to home screen
-    document.getElementById('weightInput').value=userWeightKg;
+    savePrefs({mode:currentMode,weight:userWeightKg,mapStyle:currentMapStyle,pref:routePref});
+    // Go home
     showScreen('setupScreen');
     document.getElementById('homeScreen').style.display='flex';
     document.getElementById('settingsPanel').style.display='none';
+    refreshWorkoutWidget();
+    updateGreeting();
   });
   // No backToMapBtn in new flow — homeSettings handles returning
   document.getElementById('statsClose').addEventListener('click',function(){document.getElementById('statsOverlay').classList.remove('show');});
