@@ -1381,85 +1381,8 @@ html,body{height:100%;overflow:hidden;background:#071209;font-family:'Segoe UI',
   </div>
 
   <div id="panel">
-    <!-- GOAL PLANNER -->
-    <div id="goalPlanner">
-      <div class="gp-header">
-        <span class="gp-title">🎯 Plan by Goal</span>
-        <div class="gp-mode-toggle">
-          <button class="gp-mode-btn active" id="gpByDist">📏 Distance</button>
-          <button class="gp-mode-btn" id="gpByTime">⏱ Time</button>
-        </div>
-      </div>
+    <div id="statusBar"><span>Tap 📍 to detect location or type your start</span></div>
 
-      <!-- Distance slider -->
-      <div id="gpDistPanel" class="gp-panel">
-        <div class="gp-slider-row">
-          <span class="gp-min">1 km</span>
-          <div class="gp-slider-wrap">
-            <input type="range" class="gp-slider" id="distSlider" min="1" max="30" value="10" step="1"/>
-            <div class="gp-slider-track-fill" id="distFill"></div>
-          </div>
-          <span class="gp-max">30 km</span>
-        </div>
-        <div class="gp-val-display"><span id="distVal">10</span> km</div>
-      </div>
-
-      <!-- Time slider -->
-      <div id="gpTimePanel" class="gp-panel" style="display:none">
-        <div class="gp-slider-row">
-          <span class="gp-min">15 m</span>
-          <div class="gp-slider-wrap">
-            <input type="range" class="gp-slider" id="timeSlider" min="15" max="600" value="60" step="15"/>
-            <div class="gp-slider-track-fill" id="timeFill"></div>
-          </div>
-          <span class="gp-max">10 h</span>
-        </div>
-        <div class="gp-val-display" id="timeValDisplay"><span id="timeVal">1</span> hr</div>
-      </div>
-
-      <button class="gp-explore-btn" id="gpExploreBtn">
-        <span id="gpExploreLbl">🌿 Find Me a PCN Route (~10 km)</span>
-      </button>
-    </div>
-
-    <div class="gp-divider"><span>— or plan your own route —</span></div>
-
-    <div id="statusBar"><span>Tap 📍 to detect location or type your start address</span></div>
-
-    <!-- Workout Summary Widget (Samsung Health style) -->
-    <div id="workoutWidget" style="display:none">
-      <div class="ww-header">
-        <span class="ww-title">This Week's Activity</span>
-        <span class="ww-see-all" id="wwSeeAll">See all ›</span>
-      </div>
-      <div class="ww-body">
-        <div class="ww-main-stat">
-          <div class="ww-big-time" id="wwTotalTime">0:00:00</div>
-          <div class="ww-sub">Total active time · <span id="wwSessions">0</span> sessions · <span id="wwTotalDist">0 km</span></div>
-        </div>
-        <div class="ww-mode-row">
-          <div class="ww-mode-tile">
-            <div class="ww-mode-icon">🚴</div>
-            <div class="ww-mode-val" id="wwCycleDist">0 km</div>
-            <div class="ww-mode-lbl">Cycling</div>
-          </div>
-          <div class="ww-mode-tile">
-            <div class="ww-mode-icon">🏃</div>
-            <div class="ww-mode-val" id="wwJogDist">0 km</div>
-            <div class="ww-mode-lbl">Jogging</div>
-          </div>
-          <div class="ww-mode-tile">
-            <div class="ww-mode-icon">🔥</div>
-            <div class="ww-mode-val" id="wwKcal">0</div>
-            <div class="ww-mode-lbl">kcal</div>
-          </div>
-        </div>
-        <!-- 7-day activity dot row -->
-        <div class="ww-days" id="wwDays"></div>
-      </div>
-    </div>
-
-    <!-- Token banner (shown when token missing but user skipped setup) -->
     <div id="tokenBanner">
       <b>Routing unavailable</b> — no OneMap token. <a href="#" id="tokenBannerLink">Add token to enable routing</a>
       <div class="token-row">
@@ -4240,20 +4163,33 @@ document.getElementById('tsTypeDest').addEventListener('click',function(){setTsT
 document.getElementById('tsClose').addEventListener('click',closeTargetSheet);
 document.getElementById('wsTargetBtn').addEventListener('click',openTargetSheet);
 
-document.getElementById('tsDone').addEventListener('click',function(){
-  // Read current type and apply
+document.getElementById('tsDone').addEventListener('click',async function(){
+  // Read current type and apply to wsTarget
   var active=['Dist','Time','Dest'].find(function(t){
     return document.getElementById('tsType'+t).classList.contains('active');
   });
   if(active==='Dist'){
-    wsTarget={type:'dist',value:parseInt(document.getElementById('tsDistSlider').value)};
+    wsTarget={type:'dist',value:parseInt(document.getElementById('tsDistSlider').value)||10};
   }else if(active==='Time'){
-    wsTarget={type:'time',value:parseInt(document.getElementById('tsTimeSlider').value)};
+    wsTarget={type:'time',value:parseInt(document.getElementById('tsTimeSlider').value)||60};
   }else if(active==='Dest'&&wsTarget.destName){
     wsTarget.type='dest';
   }
-  updateWsTargetDisplay();
+
   closeTargetSheet();
+  updateWsTargetDisplay();
+
+  // For distance/time targets — skip the workout screen's Start button
+  // and go DIRECTLY to route recommendations. More efficient UX.
+  if(wsTarget.type==='dist'||wsTarget.type==='time'){
+    var targetKm=wsTarget.type==='dist'
+      ?wsTarget.value
+      :parseFloat((wsTarget.value/60*ACT[currentMode].speedKmh).toFixed(1));
+    // Init app screen map first
+    if(!lmap)initApp();
+    await showRouteRecommendations(targetKm,currentMode==='jog');
+  }
+  // For 'dest' or 'none' — stay on workout screen, user taps Start
 });
 
 // Clear destination
@@ -4357,43 +4293,61 @@ var freeTrack={
 
 function startFreeTracking(){
   if(!navigator.geolocation){showToast('⚠️ GPS not available');return;}
-  if(!fromPlace){showToast('⚠️ Waiting for GPS location…');return;}
 
-  // Set target for display
-  freeTrack.targetKm   = wsTarget.type==='dist'  ? wsTarget.value : 0;
-  freeTrack.targetSecs = wsTarget.type==='time'  ? wsTarget.value*60 : 0;
+  // Init app screen (creates lmap if needed)
+  if(!lmap)initApp();
 
-  // Transition to app screen (map visible, no route)
+  var targetKm   = wsTarget.type==='dist' ? wsTarget.value : 0;
+  var targetSecs = wsTarget.type==='time' ? wsTarget.value*60 : 0;
+  freeTrack.targetKm   = targetKm;
+  freeTrack.targetSecs = targetSecs;
+  freeTrack._targetReached = false;
+
+  // Show app screen with clean map — hide panel completely
   showScreen('appScreen');
+  document.getElementById('panel').style.display='none';
+
   setTimeout(function(){
     lmap.invalidateSize();
-    lmap.setView([fromPlace.lat,fromPlace.lng],16);
-    placeUserDot(fromPlace.lat,fromPlace.lng);
+
+    // Centre map on user location if known
+    if(fromPlace){
+      lmap.setView([fromPlace.lat,fromPlace.lng],16);
+      placeUserDot(fromPlace.lat,fromPlace.lng);
+    }
 
     // Show free HUD
     document.getElementById('freeHud').style.display='block';
-    // Show target context in HUD
-    if(freeTrack.targetKm>0){
+
+    // Set target display
+    if(targetKm>0){
       document.getElementById('fhTargetLbl').textContent='Target';
-      document.getElementById('fhTarget').textContent=freeTrack.targetKm+' km';
-    }else if(freeTrack.targetSecs>0){
+      document.getElementById('fhTarget').textContent=targetKm+' km';
+    }else if(targetSecs>0){
       document.getElementById('fhTargetLbl').textContent='Target';
-      document.getElementById('fhTarget').textContent=secsToHMS(freeTrack.targetSecs);
+      document.getElementById('fhTarget').textContent=secsToHMS(targetSecs);
     }else{
       document.getElementById('fhTargetLbl').textContent='Mode';
-      document.getElementById('fhTarget').textContent=ACT[currentMode].emoji;
+      document.getElementById('fhTarget').textContent=ACT[currentMode].emoji+' Free';
     }
 
     // Init tracking state
     freeTrack.active=true;
     freeTrack.startTime=Date.now();
     freeTrack.distM=0;
-    freeTrack.lastLat=fromPlace.lat;
-    freeTrack.lastLng=fromPlace.lng;
+    freeTrack.lastLat=fromPlace?fromPlace.lat:null;
+    freeTrack.lastLng=fromPlace?fromPlace.lng:null;
     freeTrack.speedSamples=[];
-    nav.startTime=Date.now(); // for calorie calc on end
+    nav.startTime=Date.now();
 
-    // Elapsed timer — updates every second
+    // Reset HUD
+    document.getElementById('fhDist').textContent='0.00';
+    document.getElementById('fhTime').textContent='0:00:00';
+    document.getElementById('fhSpeed').textContent='0.0';
+    document.getElementById('fhKcal').textContent='0';
+    document.getElementById('fhPace').textContent='—';
+
+    // Elapsed timer
     freeTrack.timer=setInterval(updateFreeHUD,1000);
 
     // GPS position watcher
@@ -4469,15 +4423,14 @@ function stopFreeTracking(){
   if(freeTrack.watchId)navigator.geolocation.clearWatch(freeTrack.watchId);
   if(freeTrack.timer)clearInterval(freeTrack.timer);
   document.getElementById('freeHud').style.display='none';
+  document.getElementById('panel').style.display=''; // restore
 
   var elapsed=Math.round((Date.now()-freeTrack.startTime)/1000);
   var km=parseFloat((freeTrack.distM/1000).toFixed(2));
   var kcal=calcCalories(Math.max(km,0.01),currentMode,elapsed);
 
-  // Show summary toast
   showToast('Workout done · '+km.toFixed(2)+' km · '+secsToHMS(elapsed)+' · '+kcal+' kcal');
 
-  // Log to history
   var session={
     km:km,mode:currentMode,kcal:kcal,durationSecs:elapsed,
     timeStr:new Date().toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit'}),
@@ -4485,8 +4438,6 @@ function stopFreeTracking(){
   };
   addRideToHistory(session);
   refreshWorkoutWidget();
-
-  // Update XP/stats
   currentRouteKm=km;
   logRide(km,[]);
 }
@@ -4603,15 +4554,31 @@ async function showRouteRecommendations(targetKm,isJog){
   var startBtn=document.createElement('button');
   startBtn.className='rrs-start-btn';
   startBtn.textContent='🌿 Start Route';
-  startBtn.addEventListener('click',function(){
-    if(!_selectedRecRoute){
-      showToast('👆 Tap a route to select it first');return;
-    }
+  startBtn.addEventListener('click',async function(){
+    if(!_selectedRecRoute){showToast('👆 Tap a route to select it first');return;}
     var park=_selectedRecRoute.park;
     document.getElementById('routeRecsSheet').style.display='none';
     toPlace={lat:park.lat,lng:park.lng,name:park.name};
     document.getElementById('toInput').value=park.name;
-    setTimeout(function(){doRoute();},100);
+    // Calculate PCN route, then auto-start live navigation
+    setSt('sp','Calculating route to '+park.name+'…');
+    var modeType=ACT[currentMode].routeType;
+    var wayPts=getPCNWaypoints();
+    var result=await calcOMRoute(fromPlace,toPlace,wayPts,modeType);
+    if(!result)result=await calcOMRoute(fromPlace,toPlace,[],modeType);
+    if(!result){setSt('⚠️ Could not calculate route. Try a different destination.');return;}
+    // Draw route
+    if(routePolyline){lmap.removeLayer(routePolyline);routePolyline=null;}
+    routePolyline=L.polyline(result.pts.map(function(p){return[p[0],p[1]];}),
+      {color:'#2daa5a',weight:6,opacity:.92}).addTo(lmap);
+    lmap.fitBounds(routePolyline.getBounds(),{padding:[50,50]});
+    processRouteResult(result);
+    // Auto-start live navigation
+    setTimeout(function(){
+      document.getElementById('routeCard').style.display='none';
+      setSt('🟢 Starting navigation…');
+      setTimeout(startNav,600);
+    },800);
   });
   list.appendChild(startBtn);
 }
@@ -4632,17 +4599,44 @@ document.getElementById('wsStartBtn').addEventListener('click',async function(){
 
   }else if(wsTarget.type==='dist'||wsTarget.type==='time'){
     /* ── MODE 2: Distance/Time target → Route Recs ── */
+    // (tsDone already handles this directly — this is fallback if Start tapped without Done)
     var targetKm=wsTarget.type==='dist'
       ?wsTarget.value
       :parseFloat((wsTarget.value/60*ACT[currentMode].speedKmh).toFixed(1));
+    if(!lmap)initApp();
     await showRouteRecommendations(targetKm,isJog);
 
   }else if(wsTarget.type==='dest'&&wsTarget.destLat){
-    /* ── MODE 3: Destination → PCN Route ── */
+    /* ── MODE 3: Destination → PCN Route → Confirm → Live Nav ── */
+    if(!lmap)initApp();
     toPlace={lat:wsTarget.destLat,lng:wsTarget.destLng,name:wsTarget.destName};
     document.getElementById('toInput').value=wsTarget.destName;
     showScreen('appScreen');
-    setTimeout(function(){lmap.invalidateSize();doRoute();},200);
+    setTimeout(async function(){
+      lmap.invalidateSize();
+      if(fromPlace)placeUserDot(fromPlace.lat,fromPlace.lng);
+      setSt('sp','Finding PCN route to '+wsTarget.destName+'…');
+      // Calculate route
+      var wayPts=getPCNWaypoints();
+      var result=await calcOMRoute(fromPlace,toPlace,wayPts,ACT[currentMode].routeType);
+      if(!result)result=await calcOMRoute(fromPlace,toPlace,[],ACT[currentMode].routeType);
+      if(!result){setSt('⚠️ No route found. Try a different destination.');return;}
+      // Draw route on map
+      if(routePolyline){lmap.removeLayer(routePolyline);routePolyline=null;}
+      routePolyline=L.polyline(result.pts.map(function(p){return[p[0],p[1]];}),
+        {color:'#2daa5a',weight:6,opacity:.92}).addTo(lmap);
+      lmap.fitBounds(routePolyline.getBounds(),{padding:[50,50]});
+      processRouteResult(result);
+      // Show route card with prominent GO button — user confirms before nav
+      document.getElementById('routeCard').style.display='block';
+      // Update GO button to emphasise starting nav
+      var goBtn=document.getElementById('goBtn');
+      goBtn.textContent='🟢 Start Navigation';
+      goBtn.style.background='linear-gradient(135deg,#1a9a50,#2ddd70)';
+      goBtn.style.boxShadow='0 4px 20px rgba(45,221,112,.35)';
+      setSt('✅ Route ready — tap Start Navigation to begin');
+      document.getElementById('routeCard').scrollIntoView({behavior:'smooth',block:'nearest'});
+    },200);
   }
 });
 
@@ -4910,54 +4904,6 @@ function renderExploreResults(recommendations,targetKm,isJog){
 
 /* ── Goal Planner UI wiring ──────────────────────── */
 // Old goalPlanner UI removed — explore happens via workout screen target sheet
-
-document.getElementById('gpExploreBtn') && document.getElementById('gpExploreBtn').addEventListener('click',async function(){
-  var targetKm=goalDistanceKm();
-  var isJog=currentMode==='jog';
-
-  // Need user location
-  if(!fromPlace){
-    showToast('📍 Detecting your location…');
-    setBusy(true,'Getting your location…');
-    try{
-      await new Promise(function(resolve,reject){
-        navigator.geolocation.getCurrentPosition(
-          function(pos){
-            fromPlace={lat:pos.coords.latitude,lng:pos.coords.longitude,name:'My Location'};
-            document.getElementById('fromInput').value='My Location';
-            placeUserDot(fromPlace.lat,fromPlace.lng);
-            lmap.setView([fromPlace.lat,fromPlace.lng],14);
-            resolve();
-          },
-          function(err){reject(err);},
-          {enableHighAccuracy:true,timeout:10000}
-        );
-      });
-    }catch(e){
-      setBusy(false,'');
-      showToast('⚠️ Could not get location — type your start address first');
-      return;
-    }
-    setBusy(false,'');
-  }
-
-  // Load signals if not yet loaded (for scoring)
-  if(!signalState.loaded){
-    await loadSignals();
-  }
-
-  var recs=buildExploreRecommendations(fromPlace.lat,fromPlace.lng,targetKm,isJog);
-  var modeLabel=isJog?'Jogging':'Cycling';
-  document.getElementById('erHeader').textContent=
-    (isJog?'🏃':'🌿')+' Top '+recs.length+' '+modeLabel+' Destinations (~'+targetKm+' km)';
-  renderExploreResults(recs,targetKm,isJog);
-  document.getElementById('exploreResults').style.display='block';
-  document.getElementById('exploreResults').scrollIntoView({behavior:'smooth',block:'nearest'});
-
-  if(recs.length>0){
-    showToast('🎯 Tap a destination to get your route!');
-  }
-});
 
 /* ══════════════════════════════════════════════
    SAVED ROUTES
