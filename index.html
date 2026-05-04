@@ -61,9 +61,11 @@ html,body{height:100%;overflow:hidden;background:#071209;font-family:'Segoe UI',
 #streakBadge{background:#1e4a2e;color:#7dcf9a;font-size:10px;padding:3px 8px;border-radius:20px;font-weight:700;white-space:nowrap}
 .tb-icon-btn{background:none;border:none;font-size:19px;cursor:pointer;padding:2px 4px;opacity:.8}
 
-/* MAP */
-#mapWrap{flex:1;min-height:0;position:relative}
-#map{position:absolute;inset:0;z-index:1}
+/* MAP — always fills remaining vertical space */
+#mapWrap{flex:1;min-height:0;position:relative;background:#071209}
+#map{position:absolute;top:0;left:0;right:0;bottom:0;z-index:1}
+/* Leaflet container must fill parent completely */
+#map .leaflet-container{width:100%!important;height:100%!important;background:#071209}
 /* FABs — pill shape to prevent text truncation */
 .fab{position:absolute;right:10px;z-index:10;background:#040d05dd;
   border:1.5px solid #1e4a2e;border-radius:22px;height:40px;min-width:40px;
@@ -85,9 +87,11 @@ html,body{height:100%;overflow:hidden;background:#071209;font-family:'Segoe UI',
 .stc-step{font-size:10px;color:#4a8860;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
 .stc-inst{font-size:13px;font-weight:600;color:#c8ffdf;line-height:1.3}
 
-/* PANEL */
-#panel{background:#040d05;border-top:1.5px solid #0e1e14;padding:10px 12px;flex-shrink:0;overflow-y:auto;padding-bottom:max(10px,env(safe-area-inset-bottom));max-height:56vh;transition:max-height .35s}
+/* PANEL — limit height so map always gets enough room */
+#panel{background:#040d05;border-top:1.5px solid #0e1e14;padding:10px 12px;flex-shrink:0;overflow-y:auto;padding-bottom:max(10px,env(safe-area-inset-bottom));max-height:44vh;transition:max-height .35s}
 #appScreen.sim-mode #panel{max-height:0;padding:0;overflow:hidden;border-top:none}
+#appScreen.nav-mode #panel{max-height:0;padding:0;overflow:hidden;border-top:none}
+#appScreen.free-mode #panel{max-height:0;padding:0;overflow:hidden;border-top:none}
 #simBar{display:none;flex-shrink:0;background:#040d05;border-top:2px solid #1e4a2e;padding:10px 12px;padding-bottom:max(10px,env(safe-area-inset-bottom));z-index:20}
 #appScreen.sim-mode #simBar{display:block}
 
@@ -2862,7 +2866,11 @@ function startNav() {
 
   // Enter nav mode (collapses panel, shows HUD)
   document.getElementById('appScreen').classList.add('nav-mode');
-  if (lmap) lmap.invalidateSize();
+  // Force map to resize after panel collapses (CSS transition is 0.35s)
+  if(lmap){
+    lmap.invalidateSize();
+    setTimeout(function(){lmap.invalidateSize();},400);
+  }
 
   // Voice toggle — start muted
   document.getElementById('voiceToggle').classList.remove('voice-on');
@@ -2963,24 +2971,21 @@ function onNavPosition(pos) {
   // Update user marker on map
   placeUserDot(lat, lng);
 
-  // Smart pan: place user dot in the centre of the VISIBLE map area
-  // The liveHud covers the top portion of the map — measure it and
-  // shift the map centre upward by half that height so the user appears
-  // vertically centred in the open map below the HUD.
-  var hudEl = document.getElementById('navInst');
-  var statsEl = document.querySelector('.nav-stats-strip');
-  var hudH = (hudEl ? hudEl.offsetHeight : 90) +
-             (statsEl ? statsEl.offsetHeight : 44);
-  // Total pixels the HUD occupies from top of map
-  // We want the user dot to sit at (visibleHeight/2) below the HUD top
-  // That means the map centre should be (hudH/2) pixels above the screen centre
-  // Leaflet: panBy([x, y]) — positive y moves map DOWN (user appears higher)
-  // So we pan by [0, -hudH/2] to shift the map centre upward,
-  // placing the user in the lower half of the visible area.
-  var vertOffset = Math.round(hudH / 2); // pixels to shift map centre up
-
-  lmap.setView([lat, lng], lmap.getZoom(), {animate:true, duration:0.4});
-  lmap.panBy([0, -vertOffset], {animate:false});
+  // Centre user in the VISIBLE map area below the HUD.
+  // Approach: project user lat/lng to screen pixels, shift up by
+  // (hudHeight/2) pixels, unproject back to lat/lng, then setView there.
+  // This gives a single smooth setView call with no animation conflicts.
+  var hudEl   = document.getElementById('navInst');
+  var statsEl = document.querySelector && document.querySelector('.nav-stats-strip');
+  var hudH    = (hudEl   ? hudEl.offsetHeight   : 88)
+              + (statsEl ? statsEl.offsetHeight  : 44);
+  var zoom    = lmap.getZoom();
+  // Convert user position to pixel point
+  var userPx  = lmap.project([lat, lng], zoom);
+  // Shift upward by half the HUD height so user appears centred below HUD
+  var centredPx = L.point(userPx.x, userPx.y - Math.round(hudH / 2));
+  var centredLatLng = lmap.unproject(centredPx, zoom);
+  lmap.setView(centredLatLng, zoom, {animate:true, duration:0.35, noMoveStart:true});
 
   // Compute speed if not provided by GPS
   if (spd === null && nav.lastPos) {
@@ -4351,7 +4356,7 @@ function startFreeTracking(){
   document.getElementById('appScreen').classList.add('free-mode');
 
   setTimeout(function(){
-    lmap.invalidateSize();
+    if(lmap){lmap.invalidateSize();setTimeout(function(){lmap.invalidateSize();},400);}
 
     // Centre map on user location if known
     if(fromPlace){
@@ -4460,18 +4465,15 @@ function onFreePosition(pos){
   freeTrack.lastLat=lat;freeTrack.lastLng=lng;
   placeUserDot(lat,lng);
 
-  // Pan: centre user in the visible map area ABOVE the freeHud
-  // freeHud is at bottom, so shift map centre downward (pan up)
-  var fhEl=document.getElementById('freeHud');
-  var fhH=fhEl?fhEl.offsetHeight:180;
-  var mapH=document.getElementById('mapWrap')?document.getElementById('mapWrap').offsetHeight:window.innerHeight;
-  // Visible area above freeHud = mapH - fhH
-  // We want user at centre of that area = (mapH - fhH)/2 from top
-  // Screen centre = mapH/2 from top
-  // Offset needed = mapH/2 - (mapH - fhH)/2 = fhH/2 (upward = negative panBy y)
-  // panBy([0, fhH/2]) shifts map down → user appears higher → centred in visible area
-  lmap.setView([lat,lng],lmap.getZoom(),{animate:true,duration:0.4});
-  lmap.panBy([0, Math.round(fhH/2)],{animate:false});
+  // Centre user in visible map area ABOVE the freeHud (which is at bottom)
+  var fhEl  = document.getElementById('freeHud');
+  var fhH   = fhEl ? fhEl.offsetHeight : 180;
+  var zoom  = lmap.getZoom();
+  var userPx= lmap.project([lat,lng],zoom);
+  // freeHud is at bottom → shift map centre DOWN so user appears higher
+  var centredPx = L.point(userPx.x, userPx.y + Math.round(fhH / 2));
+  var centredLL = lmap.unproject(centredPx,zoom);
+  lmap.setView(centredLL,zoom,{animate:true,duration:0.35,noMoveStart:true});
 }
 
 function updateFreeHUD(){
