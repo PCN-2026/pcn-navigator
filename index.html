@@ -2963,17 +2963,24 @@ function onNavPosition(pos) {
   // Update user marker on map
   placeUserDot(lat, lng);
 
-  // Auto-pan: offset the view so user dot is in lower-third, showing route ahead
-  // Calculate a point slightly ahead of the user based on heading
-  var panLat = lat, panLng = lng;
-  if (hdg !== null && hdg !== undefined && !isNaN(hdg)) {
-    // Offset centre ~150m ahead of user in direction of travel
-    var offsetDeg = 0.0014; // ~155m
-    var hdgRad = hdg * Math.PI / 180;
-    panLat = lat + offsetDeg * Math.cos(hdgRad);
-    panLng = lng + offsetDeg * Math.sin(hdgRad);
-  }
-  lmap.panTo([panLat, panLng], {animate:true, duration:0.5});
+  // Smart pan: place user dot in the centre of the VISIBLE map area
+  // The liveHud covers the top portion of the map — measure it and
+  // shift the map centre upward by half that height so the user appears
+  // vertically centred in the open map below the HUD.
+  var hudEl = document.getElementById('navInst');
+  var statsEl = document.querySelector('.nav-stats-strip');
+  var hudH = (hudEl ? hudEl.offsetHeight : 90) +
+             (statsEl ? statsEl.offsetHeight : 44);
+  // Total pixels the HUD occupies from top of map
+  // We want the user dot to sit at (visibleHeight/2) below the HUD top
+  // That means the map centre should be (hudH/2) pixels above the screen centre
+  // Leaflet: panBy([x, y]) — positive y moves map DOWN (user appears higher)
+  // So we pan by [0, -hudH/2] to shift the map centre upward,
+  // placing the user in the lower half of the visible area.
+  var vertOffset = Math.round(hudH / 2); // pixels to shift map centre up
+
+  lmap.setView([lat, lng], lmap.getZoom(), {animate:true, duration:0.4});
+  lmap.panBy([0, -vertOffset], {animate:false});
 
   // Compute speed if not provided by GPS
   if (spd === null && nav.lastPos) {
@@ -4452,7 +4459,19 @@ function onFreePosition(pos){
 
   freeTrack.lastLat=lat;freeTrack.lastLng=lng;
   placeUserDot(lat,lng);
-  lmap.panTo([lat,lng],{animate:true,duration:.5});
+
+  // Pan: centre user in the visible map area ABOVE the freeHud
+  // freeHud is at bottom, so shift map centre downward (pan up)
+  var fhEl=document.getElementById('freeHud');
+  var fhH=fhEl?fhEl.offsetHeight:180;
+  var mapH=document.getElementById('mapWrap')?document.getElementById('mapWrap').offsetHeight:window.innerHeight;
+  // Visible area above freeHud = mapH - fhH
+  // We want user at centre of that area = (mapH - fhH)/2 from top
+  // Screen centre = mapH/2 from top
+  // Offset needed = mapH/2 - (mapH - fhH)/2 = fhH/2 (upward = negative panBy y)
+  // panBy([0, fhH/2]) shifts map down → user appears higher → centred in visible area
+  lmap.setView([lat,lng],lmap.getZoom(),{animate:true,duration:0.4});
+  lmap.panBy([0, Math.round(fhH/2)],{animate:false});
 }
 
 function updateFreeHUD(){
