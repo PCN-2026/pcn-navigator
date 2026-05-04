@@ -806,6 +806,69 @@ html,body{height:100%;overflow:hidden;background:#071209;font-family:'Segoe UI',
 .ts-rec-name{font-size:13px;font-weight:700;color:#c8ffdf;margin-bottom:2px}
 .ts-rec-meta{font-size:11px;color:#4a8060;line-height:1.4}
 .ts-rec-chevron{font-size:14px;color:#2a4a30}
+/* ── FREE WORKOUT HUD ────────────────────────── */
+#freeHud{
+  position:absolute;bottom:0;left:0;right:0;z-index:25;
+  background:rgba(4,13,5,.93);border-top:1px solid rgba(93,186,127,.2);
+  border-radius:24px 24px 0 0;
+  padding:16px 20px max(24px,env(safe-area-inset-bottom));
+  backdrop-filter:blur(20px);
+}
+.fh-top{margin-bottom:14px}
+.fh-stat-row{display:flex;align-items:center;justify-content:space-around;padding:8px 0}
+.fh-row2{border-top:1px solid rgba(93,186,127,.08);padding-top:12px;margin-top:4px}
+.fh-stat{text-align:center;flex:1}
+.fh-val{font-size:24px;font-weight:800;color:#fff;line-height:1;
+  letter-spacing:-.5px;margin-bottom:3px;font-variant-numeric:tabular-nums}
+.fh-lbl{font-size:10px;color:#4a7060;text-transform:uppercase;letter-spacing:.5px}
+.fh-divider{width:1px;height:40px;background:rgba(93,186,127,.12)}
+.fh-orange{color:#ffaa44}
+.fh-green{color:#4ddd88}
+.fh-stop-btn{width:100%;background:rgba(180,30,30,.85);border:1px solid rgba(255,80,80,.3);
+  border-radius:24px;color:#fff;font-size:15px;font-weight:700;padding:14px;cursor:pointer}
+.fh-stop-btn:active{background:rgba(140,20,20,.9)}
+
+/* ── ROUTE RECOMMENDATIONS SHEET ────────────── */
+#routeRecsSheet{
+  position:absolute;inset:0;z-index:28;background:#040d05;overflow-y:auto;
+  padding:max(20px,env(safe-area-inset-top)) 0 max(24px,env(safe-area-inset-bottom));
+}
+.rrs-header{display:flex;align-items:center;gap:12px;padding:0 16px 14px;
+  border-bottom:1px solid #0e1e14}
+.rrs-back{background:#0a1c0c;border:1px solid #1e4a2e;border-radius:50%;
+  width:36px;height:36px;color:#5dba7f;font-size:20px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.rrs-title{font-size:17px;font-weight:700;color:#c8ffdf}
+.rrs-sub{font-size:12px;color:#4a8060;padding:10px 16px 0}
+.rrs-loading-row{display:flex;align-items:center;gap:10px;padding:20px 16px;
+  font-size:13px;color:#5dba7f}
+.rrs-card{margin:10px 16px 0;background:#0a1c0c;border:1.5px solid #1e4a2e;
+  border-radius:16px;overflow:hidden;cursor:pointer;transition:border-color .15s}
+.rrs-card:active{border-color:#5dba7f}
+.rrs-card.selected{border-color:#5dba7f;background:#0d2018}
+.rrs-card-top{display:flex;align-items:center;padding:14px 14px 10px;gap:12px}
+.rrs-card-rank{font-size:22px;flex-shrink:0}
+.rrs-card-info{flex:1}
+.rrs-card-name{font-size:14px;font-weight:700;color:#c8ffdf;margin-bottom:3px}
+.rrs-card-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:#4a8060}
+.rrs-card-meta span{display:flex;align-items:center;gap:3px}
+.rrs-card-badges{display:flex;gap:5px;flex-wrap:wrap;padding:0 14px 10px}
+.rrs-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;
+  background:#1e4a2e;color:#4ddd88}
+.rrs-badge.blue{background:#1e2a4a;color:#88aaff}
+.rrs-badge.orange{background:#3a2a10;color:#ffaa44}
+.rrs-score-bar{height:3px;background:#0e1e14;margin:0 14px 14px}
+.rrs-score-fill{height:100%;background:linear-gradient(90deg,#1a6640,#4ddd88);border-radius:2px}
+.rrs-start-btn{
+  margin:16px;width:calc(100% - 32px);
+  background:linear-gradient(135deg,#1a9a50,#2ddd70);border:none;
+  border-radius:28px;color:#fff;font-size:17px;font-weight:800;
+  padding:16px;cursor:pointer;box-shadow:0 4px 20px rgba(45,221,112,.3);
+  display:block;
+}
+.rrs-start-btn:active{transform:scale(.97)}
+.rrs-empty{text-align:center;color:#3a6040;font-size:13px;padding:32px 16px;line-height:1.8}
+
 #goalPlanner{background:#0a1c0c;border:1.5px solid #1e4a2e;border-radius:14px;
   padding:12px;margin-bottom:8px}
 .gp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -1504,7 +1567,57 @@ html,body{height:100%;overflow:hidden;background:#071209;font-family:'Segoe UI',
     </div>
   </div>
 
-  <!-- Sim bar -->
+  <!-- Free Workout Tracking HUD (no route — just GPS measurement) -->
+  <div id="freeHud" style="display:none">
+    <div class="fh-top">
+      <div class="fh-stat-row">
+        <div class="fh-stat">
+          <div class="fh-val" id="fhDist">0.00</div>
+          <div class="fh-lbl">km</div>
+        </div>
+        <div class="fh-divider"></div>
+        <div class="fh-stat">
+          <div class="fh-val" id="fhTime">0:00:00</div>
+          <div class="fh-lbl">Time</div>
+        </div>
+        <div class="fh-divider"></div>
+        <div class="fh-stat">
+          <div class="fh-val" id="fhSpeed">0.0</div>
+          <div class="fh-lbl">km/h</div>
+        </div>
+      </div>
+      <div class="fh-stat-row fh-row2">
+        <div class="fh-stat">
+          <div class="fh-val fh-orange" id="fhKcal">0</div>
+          <div class="fh-lbl">kcal</div>
+        </div>
+        <div class="fh-divider"></div>
+        <div class="fh-stat">
+          <div class="fh-val fh-green" id="fhTarget">—</div>
+          <div class="fh-lbl" id="fhTargetLbl">Target</div>
+        </div>
+        <div class="fh-divider"></div>
+        <div class="fh-stat">
+          <div class="fh-val" id="fhPace">—</div>
+          <div class="fh-lbl">avg pace</div>
+        </div>
+      </div>
+    </div>
+    <button class="fh-stop-btn" id="fhStopBtn">⏹ End Workout</button>
+  </div>
+
+  <!-- Route Recommendations Sheet (shown when distance/time target set) -->
+  <div id="routeRecsSheet" style="display:none">
+    <div class="rrs-header">
+      <button class="rrs-back" id="rrsBack">‹</button>
+      <div class="rrs-title" id="rrsTitle">Choose Your Route</div>
+    </div>
+    <div class="rrs-sub" id="rrsSub">Recommended routes near you</div>
+    <div id="rrsLoading" style="display:none">
+      <div class="rrs-loading-row"><span class="spin"></span><span>Finding routes…</span></div>
+    </div>
+    <div id="rrsList"></div>
+  </div>
   <div id="simBar">
     <div class="sb-inst-row">
       <div class="sb-arrow" id="sbArrow">➡️</div>
@@ -4217,26 +4330,319 @@ function buildWsRecommendations(){
 }
 
 /* ── Start button ─────────────────────────────── */
-document.getElementById('wsStartBtn').addEventListener('click',function(){
-  if(wsTarget.type==='dest'&&wsTarget.destLat){
-    // Set destination and go to route planning screen
+/* ══════════════════════════════════════════════
+   WORKOUT START — 3 MODES
+   
+   Mode 1 — No target, no destination:
+     → Free tracking: GPS watches position,
+       measures distance, speed, time, calories.
+       No route shown. Just a live dashboard.
+   
+   Mode 2 — Distance or Time target set:
+     → Show route recommendations matching target.
+       User picks a route → confirm → Start nav.
+   
+   Mode 3 — Destination selected:
+     → Calculate PCN route to destination.
+       Show route → user confirms → Start nav.
+══════════════════════════════════════════════ */
+
+/* ── Free Tracking State ─────────────────────── */
+var freeTrack={
+  active:false,watchId:null,timer:null,
+  startTime:0,distM:0,lastLat:null,lastLng:null,
+  speedSamples:[],   // last N speed readings (m/s)
+  targetKm:0,targetSecs:0
+};
+
+function startFreeTracking(){
+  if(!navigator.geolocation){showToast('⚠️ GPS not available');return;}
+  if(!fromPlace){showToast('⚠️ Waiting for GPS location…');return;}
+
+  // Set target for display
+  freeTrack.targetKm   = wsTarget.type==='dist'  ? wsTarget.value : 0;
+  freeTrack.targetSecs = wsTarget.type==='time'  ? wsTarget.value*60 : 0;
+
+  // Transition to app screen (map visible, no route)
+  showScreen('appScreen');
+  setTimeout(function(){
+    lmap.invalidateSize();
+    lmap.setView([fromPlace.lat,fromPlace.lng],16);
+    placeUserDot(fromPlace.lat,fromPlace.lng);
+
+    // Show free HUD
+    document.getElementById('freeHud').style.display='block';
+    // Show target context in HUD
+    if(freeTrack.targetKm>0){
+      document.getElementById('fhTargetLbl').textContent='Target';
+      document.getElementById('fhTarget').textContent=freeTrack.targetKm+' km';
+    }else if(freeTrack.targetSecs>0){
+      document.getElementById('fhTargetLbl').textContent='Target';
+      document.getElementById('fhTarget').textContent=secsToHMS(freeTrack.targetSecs);
+    }else{
+      document.getElementById('fhTargetLbl').textContent='Mode';
+      document.getElementById('fhTarget').textContent=ACT[currentMode].emoji;
+    }
+
+    // Init tracking state
+    freeTrack.active=true;
+    freeTrack.startTime=Date.now();
+    freeTrack.distM=0;
+    freeTrack.lastLat=fromPlace.lat;
+    freeTrack.lastLng=fromPlace.lng;
+    freeTrack.speedSamples=[];
+    nav.startTime=Date.now(); // for calorie calc on end
+
+    // Elapsed timer — updates every second
+    freeTrack.timer=setInterval(updateFreeHUD,1000);
+
+    // GPS position watcher
+    freeTrack.watchId=navigator.geolocation.watchPosition(
+      onFreePosition,
+      function(e){console.log('[FreeTrack] GPS error:',e.message);},
+      {enableHighAccuracy:true,maximumAge:3000,timeout:10000}
+    );
+    showToast('🟢 Workout started — go!');
+  },200);
+}
+
+function onFreePosition(pos){
+  if(!freeTrack.active)return;
+  var lat=pos.coords.latitude,lng=pos.coords.longitude;
+  var speed=pos.coords.speed; // m/s from GPS, may be null
+
+  // Accumulate distance
+  if(freeTrack.lastLat!==null){
+    var d=haversine(freeTrack.lastLat,freeTrack.lastLng,lat,lng)*1000; // metres
+    if(d>2&&d<500){freeTrack.distM+=d;} // ignore tiny jitter and jumps
+  }
+  freeTrack.lastLat=lat;freeTrack.lastLng=lng;
+
+  // Speed from GPS if available, else rolling average from distance
+  if(speed!==null&&speed>=0){
+    freeTrack.speedSamples.push(speed*3.6); // m/s → km/h
+    if(freeTrack.speedSamples.length>8)freeTrack.speedSamples.shift();
+  }
+
+  // Move user dot
+  placeUserDot(lat,lng);
+  lmap.panTo([lat,lng],{animate:true,duration:.5});
+}
+
+function updateFreeHUD(){
+  if(!freeTrack.active)return;
+  var elapsed=Math.round((Date.now()-freeTrack.startTime)/1000);
+  var km=freeTrack.distM/1000;
+  var speedKmh=freeTrack.speedSamples.length
+    ?freeTrack.speedSamples.reduce(function(a,b){return a+b;},0)/freeTrack.speedSamples.length
+    :0;
+  var kcal=calcCalories(Math.max(km,0.01),currentMode,elapsed);
+  var avgPace=km>0?Math.round(elapsed/60/km)+'\''+String(Math.round((elapsed/60/km%1)*60)).padStart(2,'0')+'\"':'-\'-\'\'';
+
+  document.getElementById('fhDist').textContent=km.toFixed(2);
+  document.getElementById('fhTime').textContent=secsToHMS(elapsed);
+  document.getElementById('fhSpeed').textContent=speedKmh.toFixed(1);
+  document.getElementById('fhKcal').textContent=kcal;
+  document.getElementById('fhPace').textContent=avgPace;
+
+  // Check if target reached
+  if(freeTrack.targetKm>0&&km>=freeTrack.targetKm){
+    document.getElementById('fhTarget').textContent='✅ Done!';
+    if(!freeTrack._targetReached){
+      freeTrack._targetReached=true;
+      showToast('🎉 Target reached: '+freeTrack.targetKm+' km!');
+      speak('Congratulations! You have reached your target distance.');
+    }
+  }
+  if(freeTrack.targetSecs>0&&elapsed>=freeTrack.targetSecs){
+    document.getElementById('fhTarget').textContent='✅ Done!';
+    if(!freeTrack._targetReached){
+      freeTrack._targetReached=true;
+      showToast('🎉 Target time reached!');
+      speak('Congratulations! You have reached your target time.');
+    }
+  }
+}
+
+function stopFreeTracking(){
+  freeTrack.active=false;
+  if(freeTrack.watchId)navigator.geolocation.clearWatch(freeTrack.watchId);
+  if(freeTrack.timer)clearInterval(freeTrack.timer);
+  document.getElementById('freeHud').style.display='none';
+
+  var elapsed=Math.round((Date.now()-freeTrack.startTime)/1000);
+  var km=parseFloat((freeTrack.distM/1000).toFixed(2));
+  var kcal=calcCalories(Math.max(km,0.01),currentMode,elapsed);
+
+  // Show summary toast
+  showToast('Workout done · '+km.toFixed(2)+' km · '+secsToHMS(elapsed)+' · '+kcal+' kcal');
+
+  // Log to history
+  var session={
+    km:km,mode:currentMode,kcal:kcal,durationSecs:elapsed,
+    timeStr:new Date().toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit'}),
+    pcn:0
+  };
+  addRideToHistory(session);
+  refreshWorkoutWidget();
+
+  // Update XP/stats
+  currentRouteKm=km;
+  logRide(km,[]);
+}
+
+document.getElementById('fhStopBtn').addEventListener('click',function(){
+  if(confirm('End workout?'))stopFreeTracking();
+});
+
+/* ══════════════════════════════════════════════
+   ROUTE RECOMMENDATIONS ENGINE
+   For distance/time targets — shows ranked route
+   options the user can pick before starting.
+══════════════════════════════════════════════ */
+
+var _selectedRecRoute=null; // {park, routeResult}
+
+async function showRouteRecommendations(targetKm,isJog){
+  var sheet=document.getElementById('routeRecsSheet');
+  var list=document.getElementById('rrsList');
+  var loading=document.getElementById('rrsLoading');
+
+  // Switch to app screen first so we have a map
+  showScreen('appScreen');
+  setTimeout(function(){lmap.invalidateSize();},100);
+
+  // Show the recs sheet overlay
+  sheet.style.display='block';
+  list.innerHTML='';
+  loading.style.display='block';
+  _selectedRecRoute=null;
+
+  var modeLabel=isJog?'Jogging':'Cycling';
+  document.getElementById('rrsTitle').textContent=modeLabel+' Routes';
+  document.getElementById('rrsSub').textContent=
+    'Finding ~'+targetKm+' km routes with PCN'+(isJog?' & parks':'')+' near you…';
+
+  // Get location
+  if(!fromPlace){
+    loading.style.display='none';
+    list.innerHTML='<div class="rrs-empty">📍 Could not detect your location.<br>Go back and enable GPS.</div>';
+    return;
+  }
+
+  // Load signals for scoring
+  if(!signalState.loaded)await loadSignals();
+
+  // Get park recommendations
+  var recs=buildExploreRecommendations(fromPlace.lat,fromPlace.lng,targetKm,isJog);
+  loading.style.display='none';
+
+  if(!recs.length){
+    list.innerHTML='<div class="rrs-empty">No suitable routes found within your target distance.<br>Try a larger distance.</div>';
+    return;
+  }
+
+  var icons=['🥇','🥈','🥉','4️⃣','5️⃣'];
+  var maxScore=recs[0].score;
+  _selectedRecRoute=null;
+
+  recs.forEach(function(rec,idx){
+    var park=rec.park;
+    var isJogOk=isJog||park.cycleOk;
+    var routeDistEst=(rec.distKm*2).toFixed(1); // out-and-back estimate
+    var timeEst=Math.round(rec.distKm*2/ACT[currentMode].speedKmh*60);
+    var typeLbl=park.type==='nature_reserve'?'🌿 Nature Reserve':
+                park.type==='garden'?'🌸 Garden':'🌳 Park';
+
+    var card=document.createElement('div');
+    card.className='rrs-card';
+    card.innerHTML=
+      '<div class="rrs-card-top">'+
+        '<div class="rrs-card-rank">'+icons[idx]+'</div>'+
+        '<div class="rrs-card-info">'+
+          '<div class="rrs-card-name">'+esc(park.name)+'</div>'+
+          '<div class="rrs-card-meta">'+
+            '<span>📏 ~'+routeDistEst+' km</span>'+
+            '<span>⏱ ~'+timeEst+' min</span>'+
+            '<span>📍 '+rec.distKm.toFixed(1)+' km away</span>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="rrs-card-badges">'+
+        '<span class="rrs-badge">'+typeLbl+'</span>'+
+        (rec.pcnBonus>0?'<span class="rrs-badge blue">🚲 PCN Access</span>':'')+
+        '<span class="rrs-badge orange">🌳 Trees: '+park.treeScore+'/10</span>'+
+        (rec.sigPenalty>0?'<span class="rrs-badge">~'+Math.max(0,rec.sigPenalty*2)+' signals</span>':'')+
+      '</div>'+
+      '<div class="rrs-score-bar"><div class="rrs-score-fill" style="width:'+Math.round(rec.score/maxScore*100)+'%"></div></div>';
+
+    card.addEventListener('click',function(){
+      // Deselect all
+      document.querySelectorAll('.rrs-card').forEach(function(c){c.classList.remove('selected');});
+      card.classList.add('selected');
+      _selectedRecRoute=rec;
+      document.getElementById('rrsSub').textContent='✅ '+park.name+' selected — tap Start Route';
+      // Show route on map
+      toPlace={lat:park.lat,lng:park.lng,name:park.name};
+      document.getElementById('toInput').value=park.name;
+      // Preview route on wsMap
+      if(wsMap){
+        L.marker([park.lat,park.lng],{
+          icon:L.divIcon({className:'',
+            html:'<div style="background:#2daa5a;color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:12px;white-space:nowrap;box-shadow:0 2px 8px #0007">🏁 '+esc(park.name)+'</div>',
+            iconSize:[150,28],iconAnchor:[75,28]})
+        }).addTo(lmap);
+        lmap.panTo([park.lat,park.lng]);
+      }
+    });
+
+    list.appendChild(card);
+  });
+
+  // Start Route button
+  var startBtn=document.createElement('button');
+  startBtn.className='rrs-start-btn';
+  startBtn.textContent='🌿 Start Route';
+  startBtn.addEventListener('click',function(){
+    if(!_selectedRecRoute){
+      showToast('👆 Tap a route to select it first');return;
+    }
+    var park=_selectedRecRoute.park;
+    document.getElementById('routeRecsSheet').style.display='none';
+    toPlace={lat:park.lat,lng:park.lng,name:park.name};
+    document.getElementById('toInput').value=park.name;
+    setTimeout(function(){doRoute();},100);
+  });
+  list.appendChild(startBtn);
+}
+
+document.getElementById('rrsBack').addEventListener('click',function(){
+  document.getElementById('routeRecsSheet').style.display='none';
+  showScreen('workoutScreen');
+  if(wsMap)setTimeout(function(){wsMap.invalidateSize();},100);
+});
+
+/* ── Updated Start button — 3-mode router ───────── */
+document.getElementById('wsStartBtn').addEventListener('click',async function(){
+  var isJog=currentMode==='jog';
+
+  if(wsTarget.type==='none'){
+    /* ── MODE 1: No target → Free Workout Tracking ── */
+    startFreeTracking();
+
+  }else if(wsTarget.type==='dist'||wsTarget.type==='time'){
+    /* ── MODE 2: Distance/Time target → Route Recs ── */
+    var targetKm=wsTarget.type==='dist'
+      ?wsTarget.value
+      :parseFloat((wsTarget.value/60*ACT[currentMode].speedKmh).toFixed(1));
+    await showRouteRecommendations(targetKm,isJog);
+
+  }else if(wsTarget.type==='dest'&&wsTarget.destLat){
+    /* ── MODE 3: Destination → PCN Route ── */
     toPlace={lat:wsTarget.destLat,lng:wsTarget.destLng,name:wsTarget.destName};
     document.getElementById('toInput').value=wsTarget.destName;
-    // Go to app screen and calculate route
     showScreen('appScreen');
     setTimeout(function(){lmap.invalidateSize();doRoute();},200);
-  }else{
-    // No destination — go to app screen, start live nav from current location
-    showScreen('appScreen');
-    setTimeout(function(){
-      lmap.invalidateSize();
-      if(fromPlace)placeUserDot(fromPlace.lat,fromPlace.lng);
-      if(wsTarget.type!=='none'){
-        showToast('🎯 Target: '+(wsTarget.type==='dist'?wsTarget.value+' km':wsTarget.value+' min'));
-      }
-      // Start live navigation directly
-      setTimeout(startNav,400);
-    },200);
   }
 });
 
