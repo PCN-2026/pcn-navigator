@@ -452,107 +452,119 @@ html,body{height:100%;overflow:hidden;background:#071209;font-family:'Segoe UI',
 #setupScreen{background:#040d05;overflow:hidden;z-index:300}
 #homeScreen{
   height:100%;overflow-y:auto;display:flex;flex-direction:column;
-  /* Base dark green — images layered on top via sections */
   background:#040d05;
 }
 
-/* ── Hero section with PCN background image ─── */
+
+/* ── Hero section — CSS-only, no external images ─── */
 .home-hero{
-  position:relative;min-height:52vh;flex-shrink:0;
-  background:
-    linear-gradient(to bottom, #040d05cc 0%, transparent 35%, transparent 55%, #040d05 100%),
-    url('https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/Punggol_Waterway_Park_Connector.jpg/1200px-Punggol_Waterway_Park_Connector.jpg')
-    center/cover no-repeat;
+  position:relative;min-height:50vh;flex-shrink:0;overflow:hidden;
+  background:linear-gradient(160deg,#081f0e 0%,#0f3a1c 40%,#071a0d 100%);
   display:flex;flex-direction:column;justify-content:space-between;
   padding:max(20px,env(safe-area-inset-top)) 20px 0;
 }
-/* Fallback cycling path image via a data URI gradient if network fails */
+/* Radial glow accents */
 .home-hero::before{
-  content:'';position:absolute;inset:0;z-index:0;
-  background:linear-gradient(160deg,#0d3a1a 0%,#1a5a30 40%,#0a2a14 100%);
-  opacity:.7;
+  content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 80% 60% at 90% 20%, #2daa5a18 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 10% 80%, #4ddd8812 0%, transparent 50%),
+    radial-gradient(ellipse 100% 40% at 50% 110%, #1a66402a 0%, transparent 60%);
+}
+/* Subtle grid / path texture */
+.home-hero::after{
+  content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(45,170,90,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(45,170,90,.05) 1px, transparent 1px);
+  background-size:40px 40px;
 }
 
-/* Header row on top of hero */
+/* Header row */
 .home-header{
   position:relative;z-index:2;
   display:flex;align-items:center;justify-content:space-between;
-  margin-bottom:0;
 }
 .home-greeting{
   font-size:18px;font-weight:800;color:#fff;
   text-shadow:0 1px 8px #0008;letter-spacing:-.3px;
 }
-.home-sub{
-  font-size:11px;color:#a8ddb8;margin-top:1px;
-  text-shadow:0 1px 4px #0006;
-}
+.home-sub{font-size:11px;color:#a8ddb8;margin-top:1px}
 .home-icon-btn{
-  background:rgba(4,13,5,.55);border:1px solid rgba(93,186,127,.35);
+  background:rgba(4,13,5,.7);border:1px solid rgba(93,186,127,.3);
   border-radius:50%;width:36px;height:36px;font-size:15px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  backdrop-filter:blur(8px);color:#c8ffdf;
+  display:flex;align-items:center;justify-content:center;color:#c8ffdf;
 }
-.home-icon-btn:active{background:rgba(30,74,46,.8)}
+.home-icon-btn:active{background:rgba(30,74,46,.9)}
 
-/* Hero bottom — activity cards sit here */
-.home-hero-bottom{
-  position:relative;z-index:2;
-  padding-bottom:20px;
-}
+/* Hero bottom content */
+.home-hero-bottom{position:relative;z-index:2;padding-bottom:20px}
 .home-hero-tagline{
   font-size:26px;font-weight:900;color:#fff;line-height:1.15;
-  text-shadow:0 2px 16px #0009;letter-spacing:-.5px;
-  margin-bottom:18px;
+  text-shadow:0 2px 16px #0009;letter-spacing:-.5px;margin-bottom:18px;
 }
 .home-hero-tagline span{color:#4ddd88}
 
-/* ── Activity cards — side by side ─────────── */
+/* ── Activity cards ─────────────────────────── */
 .home-activity-row{display:flex;gap:10px;margin-bottom:0}
 .home-act-btn{
   flex:1;border:none;border-radius:20px;padding:0;cursor:pointer;
-  position:relative;overflow:hidden;min-height:130px;
+  position:relative;overflow:hidden;min-height:140px;
+  box-shadow:0 6px 28px #00000055;
   transition:transform .18s,box-shadow .18s;
-  box-shadow:0 4px 24px #00000066;
 }
-.home-act-btn:active{transform:scale(.96)}
-/* Cycling card — PCN park path image */
-.cycling-btn{
+.home-act-btn:active{transform:scale(.95);box-shadow:0 2px 12px #00000033}
+
+/* Cycling — lush PCN green */
+.cycling-btn{background:linear-gradient(145deg,#0b2e14 0%,#1a6640 55%,#0d4428 100%)}
+.cycling-btn::before{
+  content:'';position:absolute;inset:0;pointer-events:none;
   background:
-    linear-gradient(145deg,#0e3a1acc,#1a664099),
-    url('https://live.staticflickr.com/7056/6867908749_2c02e673ce_b.jpg')
-    center/cover no-repeat;
+    radial-gradient(ellipse 120% 70% at 50% 120%, #2daa5a30 0%, transparent 55%),
+    radial-gradient(ellipse 50% 50% at 85% 15%, #4ddd8818 0%, transparent 45%);
 }
-/* Jogging card — park with flowers image */
-.jogging-btn{
+/* Decorative curved path line */
+.cycling-btn::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:60px;pointer-events:none;
+  background:rgba(45,170,90,.07);border-radius:60% 60% 0 0;
+  border-top:1.5px solid rgba(45,170,90,.18);
+}
+
+/* Jogging — blue-teal nature */
+.jogging-btn{background:linear-gradient(145deg,#0a1e30 0%,#1a4868 55%,#0d3248 100%)}
+.jogging-btn::before{
+  content:'';position:absolute;inset:0;pointer-events:none;
   background:
-    linear-gradient(145deg,#1a2a3acc,#0d3a5099),
-    url('https://www.nparks.gov.sg/-/media/nparks-real-content/gardens-parks-and-nature/parks-and-nature-reserve/sungei-buloh/sungei-buloh-siteimages-2023/sbwr-1.jpg')
-    center/cover no-repeat;
+    radial-gradient(ellipse 120% 70% at 50% 120%, #2d7acc30 0%, transparent 55%),
+    radial-gradient(ellipse 50% 50% at 85% 15%, #4488ff18 0%, transparent 45%);
 }
+.jogging-btn::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:60px;pointer-events:none;
+  background:rgba(45,122,204,.07);border-radius:60% 60% 0 0;
+  border-top:1.5px solid rgba(45,122,204,.18);
+}
+
 .home-act-inner{
-  position:relative;z-index:2;height:100%;
+  position:relative;z-index:2;height:100%;min-height:140px;
   display:flex;flex-direction:column;justify-content:flex-end;
   padding:14px 14px 16px;
-  background:linear-gradient(to top,#000000aa 0%,transparent 60%);
-  border-radius:20px;
 }
 .hab-badge{
   display:inline-flex;align-items:center;gap:4px;
-  background:rgba(255,255,255,.15);backdrop-filter:blur(8px);
-  border:1px solid rgba(255,255,255,.25);border-radius:20px;
-  padding:4px 10px;font-size:11px;font-weight:700;color:#fff;
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
+  border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;color:#fff;
   margin-bottom:8px;width:fit-content;
 }
-.hab-icon{font-size:18px;margin-right:2px}
+.hab-icon{font-size:16px;margin-right:1px}
 .hab-label{font-size:17px;font-weight:800;color:#fff;line-height:1;margin-bottom:3px}
-.hab-sub{font-size:11px;color:rgba(255,255,255,.75);line-height:1.3}
+.hab-sub{font-size:11px;color:rgba(255,255,255,.65);line-height:1.3}
 .hab-arrow{
-  position:absolute;top:14px;right:14px;
-  width:28px;height:28px;background:rgba(255,255,255,.2);
+  position:absolute;top:12px;right:12px;z-index:3;
+  width:26px;height:26px;background:rgba(255,255,255,.15);
   border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-size:14px;color:#fff;backdrop-filter:blur(4px);
+  font-size:13px;color:#fff;
 }
+
 
 /* ── Content section below hero ────────────── */
 .home-content{
@@ -625,7 +637,7 @@ html,body{height:100%;overflow:hidden;background:#071209;font-family:'Segoe UI',
 /* Settings panel inside home screen */
 #settingsPanel{
   height:100%;overflow-y:auto;padding:max(20px,env(safe-area-inset-top)) 16px 32px;
-  background:#040d05;
+  background:#040d05;flex-direction:column;
 }
 .settings-header{
   display:flex;align-items:center;gap:10px;margin-bottom:24px;
@@ -4076,7 +4088,8 @@ document.getElementById('homeStats').addEventListener('click',function(){
 });
 document.getElementById('homeSettings').addEventListener('click',function(){
   document.getElementById('homeScreen').style.display='none';
-  document.getElementById('settingsPanel').style.display='block';
+  document.getElementById('settingsPanel').style.display='flex';
+  document.getElementById('settingsPanel').style.flexDirection='column';
 });
 document.getElementById('settingsBack').addEventListener('click',function(){
   document.getElementById('settingsPanel').style.display='none';
@@ -4093,15 +4106,10 @@ document.getElementById('homeSavedRoutes').addEventListener('click',function(){
 /* ══════════════════════════════════════════════
    SINGAPORE PARKS & NATURE DATABASE
    Used for goal-based route recommendations.
-   
-   Types: 'nature_reserve' | 'park' | 'garden'
+   Types: nature_reserve | park | garden
    cycleOk: false = NO CYCLING ALLOWED
-   
-   Sources:
-   - NParks cycling rules: pcn.nparks.gov.sg
-   - 4 nature reserves: NO cycling (Active Mobility Act)
-   - All other NParks parks: cycling generally allowed
-   - Botanic Gardens: no cycling in garden areas
+   Sources: NParks cycling rules (pcn.nparks.gov.sg)
+   4 nature reserves: NO cycling (Active Mobility Act)
 ══════════════════════════════════════════════ */
 var SG_PARKS=[
   /* ── Nature Reserves (NO CYCLING) ─────────── */
