@@ -1318,10 +1318,186 @@ html,body{height:100%;overflow:hidden;background:#071209;font-family:'Segoe UI',
   </div>
 
   <div id="panel">
-        <div id="statusBar"><span>Tap 📍 to detect location or type your start address</span></div>
+    <!-- GOAL PLANNER -->
+    <div id="goalPlanner">
+      <div class="gp-header">
+        <span class="gp-title">🎯 Plan by Goal</span>
+        <div class="gp-mode-toggle">
+          <button class="gp-mode-btn active" id="gpByDist">📏 Distance</button>
+          <button class="gp-mode-btn" id="gpByTime">⏱ Time</button>
+        </div>
+      </div>
 
+      <!-- Distance slider -->
+      <div id="gpDistPanel" class="gp-panel">
+        <div class="gp-slider-row">
+          <span class="gp-min">1 km</span>
+          <div class="gp-slider-wrap">
+            <input type="range" class="gp-slider" id="distSlider" min="1" max="30" value="10" step="1"/>
+            <div class="gp-slider-track-fill" id="distFill"></div>
+          </div>
+          <span class="gp-max">30 km</span>
+        </div>
+        <div class="gp-val-display"><span id="distVal">10</span> km</div>
+      </div>
 
-        <!-- EXPLORE RESULTS (goal-based route recommendations) -->
+      <!-- Time slider -->
+      <div id="gpTimePanel" class="gp-panel" style="display:none">
+        <div class="gp-slider-row">
+          <span class="gp-min">15 m</span>
+          <div class="gp-slider-wrap">
+            <input type="range" class="gp-slider" id="timeSlider" min="15" max="600" value="60" step="15"/>
+            <div class="gp-slider-track-fill" id="timeFill"></div>
+          </div>
+          <span class="gp-max">10 h</span>
+        </div>
+        <div class="gp-val-display" id="timeValDisplay"><span id="timeVal">1</span> hr</div>
+      </div>
+
+      <button class="gp-explore-btn" id="gpExploreBtn">
+        <span id="gpExploreLbl">🌿 Find Me a PCN Route (~10 km)</span>
+      </button>
+    </div>
+
+    <div class="gp-divider"><span>— or plan your own route —</span></div>
+
+    <div id="statusBar"><span>Tap 📍 to detect location or type your start address</span></div>
+
+    <!-- Workout Summary Widget (Samsung Health style) -->
+    <div id="workoutWidget" style="display:none">
+      <div class="ww-header">
+        <span class="ww-title">This Week's Activity</span>
+        <span class="ww-see-all" id="wwSeeAll">See all ›</span>
+      </div>
+      <div class="ww-body">
+        <div class="ww-main-stat">
+          <div class="ww-big-time" id="wwTotalTime">0:00:00</div>
+          <div class="ww-sub">Total active time · <span id="wwSessions">0</span> sessions · <span id="wwTotalDist">0 km</span></div>
+        </div>
+        <div class="ww-mode-row">
+          <div class="ww-mode-tile">
+            <div class="ww-mode-icon">🚴</div>
+            <div class="ww-mode-val" id="wwCycleDist">0 km</div>
+            <div class="ww-mode-lbl">Cycling</div>
+          </div>
+          <div class="ww-mode-tile">
+            <div class="ww-mode-icon">🏃</div>
+            <div class="ww-mode-val" id="wwJogDist">0 km</div>
+            <div class="ww-mode-lbl">Jogging</div>
+          </div>
+          <div class="ww-mode-tile">
+            <div class="ww-mode-icon">🔥</div>
+            <div class="ww-mode-val" id="wwKcal">0</div>
+            <div class="ww-mode-lbl">kcal</div>
+          </div>
+        </div>
+        <!-- 7-day activity dot row -->
+        <div class="ww-days" id="wwDays"></div>
+      </div>
+    </div>
+
+    <!-- Token banner (shown when token missing but user skipped setup) -->
+    <div id="tokenBanner">
+      <b>Routing unavailable</b> — no OneMap token. <a href="#" id="tokenBannerLink">Add token to enable routing</a>
+      <div class="token-row">
+        <input class="token-inp" id="inlineEmail" type="email" placeholder="OneMap email"/>
+        <input class="token-inp" id="inlinePassword" type="password" placeholder="Password"/>
+        <button class="token-save-btn" id="inlineTokenBtn">Get Token</button>
+      </div>
+    </div>
+
+    <div class="inp-card">
+      <div class="inp-row">
+        <div class="inp-ico">🔵</div>
+        <input class="inp-field" id="fromInput" placeholder="Starting location…" autocomplete="off" autocorrect="off" spellcheck="false"/>
+        <button class="use-btn" id="fromUseBtn">Use ↵</button>
+        <button class="inp-act" id="gpsBtn">⊕</button>
+        <div class="om-dropdown" id="fromDrop"></div>
+      </div>
+      <div class="swap-row">
+        <div class="swap-line"></div>
+        <div class="swap-btn" id="swapBtn">⇅</div>
+        <div class="swap-line"></div>
+      </div>
+      <div class="inp-row">
+        <div class="inp-ico">🏁</div>
+        <input class="inp-field" id="toInput" placeholder="Destination (park, address, postal…)" autocomplete="off" autocorrect="off" spellcheck="false"/>
+        <button class="use-btn" id="toUseBtn">Use ↵</button>
+        <button class="inp-act" id="clearToBtn">✕</button>
+        <div class="om-dropdown" id="toDrop"></div>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <!-- Get Route + Clear on same row -->
+      <div class="action-btns">
+        <button class="go-btn" id="routeBtn">🌿 Get PCN Route</button>
+        <button class="clr-btn" id="clearAllBtn">✕ Clear</button>
+      </div>
+    </div>
+
+    <div id="pcnList">
+      <div class="pcn-list-title">🌿 Park Connectors on Route</div>
+      <div id="pcnSegments"></div>
+    </div>
+
+    <div id="routeCard">
+      <!-- Single route stats -->
+      <div class="route-summary-card">
+        <div class="rs-stat">
+          <div class="rs-val" id="rcDist">—</div>
+          <div class="rs-lbl">Distance</div>
+        </div>
+        <div class="rs-divider"></div>
+        <div class="rs-stat">
+          <div class="rs-val" id="rcTime">—</div>
+          <div class="rs-lbl">Est. Time</div>
+        </div>
+        <div class="rs-divider"></div>
+        <div class="rs-stat">
+          <div class="rs-val green" id="rcPcnCount">—</div>
+          <div class="rs-lbl">PCN segs</div>
+        </div>
+      </div>
+      <!-- PCN info -->
+      <div class="rc-pcn" id="rcPcn"></div>
+
+      <!-- Shared actions -->
+      <div class="route-actions">
+        <!-- Calorie card -->
+        <div class="cal-card" id="calCard" style="display:none">
+          <div class="cal-icon" id="calIcon">🔥</div>
+          <div class="cal-info">
+            <div class="cal-val"><span id="calVal">—</span> kcal</div>
+            <div class="cal-lbl">Est. calories burned</div>
+            <div class="cal-detail" id="calDetail"></div>
+          </div>
+        </div>
+        <!-- GO + share + save -->
+        <div class="rc-go-row">
+          <button class="rc-go-btn" id="goBtn">🚴 GO — Start Navigation</button>
+          <button class="rc-icon-btn" id="shareBtn" title="Share route">📤</button>
+          <button class="rc-icon-btn" id="saveRouteBtn" title="Save route">💾</button>
+        </div>
+        <!-- Log + Simulate -->
+        <div class="rc-btn-row">
+          <button class="rc-log-btn" id="logRideBtn">🎉 Log Ride</button>
+          <button class="rc-sim-btn" id="simBtn">▶ Simulate</button>
+        </div>
+        <!-- Directions toggle -->
+        <button id="dirToggle" style="display:none">📋 Turn-by-Turn <span class="dir-arrow">▼</span></button>
+        <div id="dirPanel"></div>
+      </div>
+    </div>
+
+    <!-- Daily motivation card -->
+    <div class="motiv-card" id="motivCard" style="display:none">
+      <div class="motiv-quote" id="motivQuote"></div>
+      <div class="motiv-attr" id="motivAttr"></div>
+      <div class="motiv-tip" id="motivTip"></div>
+    </div>
+
+    <!-- EXPLORE RESULTS (goal-based route recommendations) -->
     <div id="exploreResults">
       <div class="er-header" id="erHeader">🌿 Recommended Routes</div>
       <div id="erList"></div>
@@ -1681,9 +1857,7 @@ async function doLaunch(){
 }
 
 function showErr(m){
-  var b=document.getElementById('errBox');
-  b.style.display=m?'block':'none';
-  b.innerHTML=m;
+  if(m)showToast('⚠️ '+m);
 }
 function setBusy(on,msg){
   // errBox/loadRow/launchBtn removed — show status via toast
